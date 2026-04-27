@@ -105,6 +105,15 @@ const day = interaction.options.getString('day');
 const timeStr = interaction.options.getString('time');
 const opponent = interaction.options.getUser('opponent');
 
+const [month, dateNum] = day.split("/").map(Number);
+const now = new Date();
+
+const parsedDate = new Date(
+  now.getFullYear(),
+  month - 1
+  dateNum
+);
+
 const parsedTime = parseTime(timeStr);
 
 if (parsedTime === null) {
@@ -116,7 +125,7 @@ return interaction.editReply("❌ Matches must be at least 1 hour apart.");
 }
 
 matches.push({
-day,
+day: parsedDate,
 time: parsedTime,
 timeStr,
 opponentId: opponent.id,
@@ -125,7 +134,7 @@ confirmed: false
 });
 
 await interaction.editReply(
-`📢 ${opponent}, match scheduled!\n📅 ${day}\n🕒 ${timeStr} EST\nUse /confirm to approve.`
+`📢 ${opponent}, match scheduled!\n📅 ${parsedDate.toLocaleDateString("en-US')}\n🕒 ${timeStr} EST\nUse /confirm to approve.`
 );
 }
 
