@@ -10,7 +10,10 @@ const CLIENT_ID = process.env.CLIENT_ID;
 
 let matches = [];
 
-// 🔹 Parse time like "8:00 PM"
+// 🔁 RESET SETTINGS
+const RESET_HOUR = 9; // 9 AM EST
+
+// 🔹 Parse time
 function parseTime(timeStr) {
 const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
 if (!match) return null;
@@ -25,7 +28,7 @@ if (period.toUpperCase() === "AM" && hours === 12) hours = 0;
 return { hours, minutes };
 }
 
-// 🔥 Correct overlap check
+// 🔥 Overlap fix
 function isTooClose(newDate, newTime) {
 const newDateTime = new Date(newDate);
 newDateTime.setHours(newTime.hours, newTime.minutes, 0, 0);
@@ -35,8 +38,25 @@ const matchDateTime = new Date(match.day);
 matchDateTime.setHours(match.time.hours, match.time.minutes, 0, 0);
 
 const diff = Math.abs(matchDateTime - newDateTime);
-return diff < 60 * 60 * 1000; // 1 hour
+return diff < 60 * 60 * 1000;
 });
+}
+
+// 🔁 WEEKLY RESET (silent)
+function startWeeklyReset() {
+setInterval(() => {
+const now = new Date();
+const est = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+
+const day = est.getDay();
+const hour = est.getHours();
+const minute = est.getMinutes();
+
+if (day === 0 && hour === RESET_HOUR && minute === 0) {
+matches = [];
+console.log("🧹 Weekly schedule reset");
+}
+}, 60000);
 }
 
 // 🔹 Commands
@@ -85,13 +105,14 @@ console.error(err);
 client.once('ready', () => {
 matches = [];
 console.log(`Logged in as ${client.user.tag}`);
+startWeeklyReset();
 });
 
 // 🔹 Command handler
 client.on('interactionCreate', async interaction => {
 if (!interaction.isChatInputCommand()) return;
 
-// 🔹 SET MATCH
+// SET MATCH
 if (interaction.commandName === 'setmatchup') {
 await interaction.deferReply();
 
@@ -102,12 +123,7 @@ const opponent = interaction.options.getUser('opponent');
 const [month, dateNum] = day.split("/").map(Number);
 const now = new Date();
 
-const parsedDate = new Date(
-now.getFullYear(),
-month - 1,
-dateNum
-);
-
+const parsedDate = new Date(now.getFullYear(), month - 1, dateNum);
 const parsedTime = parseTime(timeStr);
 
 if (!parsedTime) {
@@ -127,13 +143,12 @@ creatorId: interaction.user.id,
 confirmed: false
 });
 
-// 🔥 PINGS OPPONENT HERE
 await interaction.editReply(
 `📅 Match scheduled!\n🗓 ${parsedDate.toLocaleDateString("en-US")}\n🕒 ${timeStr} EST\n\n👤 <@${opponent.id}>, use /confirm to approve.`
 );
 }
 
-// 🔹 CONFIRM
+// CONFIRM
 if (interaction.commandName === 'confirm') {
 const match = matches.find(
 m => m.opponentId === interaction.user.id && !m.confirmed
@@ -144,11 +159,10 @@ return interaction.reply("❌ No match to confirm.");
 }
 
 match.confirmed = true;
-
 return interaction.reply("✅ Match confirmed!");
 }
 
-// 🔹 VIEW TIMES (NO PINGS)
+// VIEW TIMES (NO PINGS)
 if (interaction.commandName === 'viewtimes') {
 if (matches.length === 0) {
 return interaction.reply("No matches scheduled.");
