@@ -25,7 +25,7 @@ if (period.toUpperCase() === "AM" && hours === 12) hours = 0;
 return { hours, minutes };
 }
 
-// 🔥 FIXED overlap check (uses FULL date + time)
+// 🔥 Correct overlap check (date + time)
 function isTooClose(newDate, newTime) {
 const newDateTime = new Date(newDate);
 newDateTime.setHours(newTime.hours, newTime.minutes, 0, 0);
@@ -46,15 +46,15 @@ new SlashCommandBuilder()
 .setDescription('Schedule a match')
 .addStringOption(o =>
 o.setName('day')
-.setDescription('Date (MM/DD)')
+.setDescription('Date like 4/28')
 .setRequired(true))
 .addStringOption(o =>
 o.setName('time')
-.setDescription('Time (ex: 8:00 PM)')
+.setDescription('Time like 8:00 PM')
 .setRequired(true))
 .addUserOption(o =>
 o.setName('opponent')
-.setDescription('Opponent')
+.setDescription('Opponent manager')
 .setRequired(true)),
 
 new SlashCommandBuilder()
@@ -63,7 +63,7 @@ new SlashCommandBuilder()
 
 new SlashCommandBuilder()
 .setName('viewtimes')
-.setDescription('View scheduled matches')
+.setDescription('View schedule')
 ];
 
 // 🔹 Register commands
@@ -83,7 +83,7 @@ console.error(err);
 
 // 🔹 Ready
 client.once('ready', () => {
-matches = []; // 🔥 clears old broken data
+matches = []; // clears old matches on restart
 console.log(`Logged in as ${client.user.tag}`);
 });
 
@@ -91,14 +91,15 @@ console.log(`Logged in as ${client.user.tag}`);
 client.on('interactionCreate', async interaction => {
 if (!interaction.isChatInputCommand()) return;
 
-// /setmatchup
+// 🔹 SET MATCH
 if (interaction.commandName === 'setmatchup') {
 await interaction.deferReply();
 
-const day = interaction.options.getString('day'); // MM/DD
+const day = interaction.options.getString('day');
 const timeStr = interaction.options.getString('time');
 const opponent = interaction.options.getUser('opponent');
 
+// FIXED DATE
 const [month, dateNum] = day.split("/").map(Number);
 const now = new Date();
 
@@ -111,7 +112,7 @@ dateNum
 const parsedTime = parseTime(timeStr);
 
 if (!parsedTime) {
-return interaction.editReply("❌ Use time like: 8:00 PM");
+return interaction.editReply("❌ Use time like 8:00 PM");
 }
 
 if (isTooClose(parsedDate, parsedTime)) {
@@ -132,10 +133,10 @@ await interaction.editReply(
 );
 }
 
-// /confirm
+// 🔹 CONFIRM
 if (interaction.commandName === 'confirm') {
-const match = matches.find(m =>
-m.opponentId === interaction.user.id && !m.confirmed
+const match = matches.find(
+m => m.opponentId === interaction.user.id && !m.confirmed
 );
 
 if (!match) {
@@ -147,15 +148,18 @@ match.confirmed = true;
 return interaction.reply("✅ Match confirmed!");
 }
 
-// /viewtimes
+// 🔹 VIEW TIMES (NO PINGS, JUST NAMES)
 if (interaction.commandName === 'viewtimes') {
 if (matches.length === 0) {
 return interaction.reply("No matches scheduled.");
 }
 
-const formatted = matches.map(m =>
-`${m.confirmed ? "✅" : "❌"} ${m.day.toLocaleDateString("en-US")} - ${m.timeStr} EST`
-).join("\n");
+const formatted = matches.map(m => {
+const creator = interaction.guild.members.cache.get(m.creatorId)?.user.username || "Unknown";
+const opponent = interaction.guild.members.cache.get(m.opponentId)?.user.username || "Unknown";
+
+return `${m.confirmed ? "✅" : "❌"} ${m.day.toLocaleDateString("en-US")} - ${m.timeStr} EST → ${creator} vs ${opponent}`;
+}).join("\n");
 
 return interaction.reply(`📅 Schedule:\n${formatted}`);
 }
