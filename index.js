@@ -25,7 +25,7 @@ if (period.toUpperCase() === "AM" && hours === 12) hours = 0;
 return { hours, minutes };
 }
 
-// 🔥 Correct overlap check (date + time)
+// 🔥 Correct overlap check
 function isTooClose(newDate, newTime) {
 const newDateTime = new Date(newDate);
 newDateTime.setHours(newTime.hours, newTime.minutes, 0, 0);
@@ -83,7 +83,7 @@ console.error(err);
 
 // 🔹 Ready
 client.once('ready', () => {
-matches = []; // clears old matches on restart
+matches = [];
 console.log(`Logged in as ${client.user.tag}`);
 });
 
@@ -99,7 +99,6 @@ const day = interaction.options.getString('day');
 const timeStr = interaction.options.getString('time');
 const opponent = interaction.options.getUser('opponent');
 
-// FIXED DATE
 const [month, dateNum] = day.split("/").map(Number);
 const now = new Date();
 
@@ -128,8 +127,9 @@ creatorId: interaction.user.id,
 confirmed: false
 });
 
+// 🔥 PINGS OPPONENT HERE
 await interaction.editReply(
-`📅 Match scheduled!\n🗓 ${parsedDate.toLocaleDateString("en-US")}\n🕒 ${timeStr} EST\nUse /confirm to approve.`
+`📅 Match scheduled!\n🗓 ${parsedDate.toLocaleDateString("en-US")}\n🕒 ${timeStr} EST\n\n👤 <@${opponent.id}>, use /confirm to approve.`
 );
 }
 
@@ -148,7 +148,7 @@ match.confirmed = true;
 return interaction.reply("✅ Match confirmed!");
 }
 
-// 🔹 VIEW TIMES (NO PINGS, JUST NAMES)
+// 🔹 VIEW TIMES (NO PINGS)
 if (interaction.commandName === 'viewtimes') {
 if (matches.length === 0) {
 return interaction.reply("No matches scheduled.");
