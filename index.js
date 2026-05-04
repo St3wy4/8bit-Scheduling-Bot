@@ -30,8 +30,12 @@ const command = require(`./commands/${file}`);
 client.commands.set(command.data.name, command);
 }
 
-// TEMP match storage
-const scheduledMatches = [];
+// MATCH STORAGE
+const pendingMatches = [];
+const confirmedMatches = [];
+
+global.pendingMatches = pendingMatches;
+global.confirmedMatches = confirmedMatches;
 
 // ready
 client.once('ready', () => {
@@ -75,21 +79,37 @@ await interaction.showModal(modal);
 // MODAL SUBMIT
 if (interaction.isModalSubmit()) {
 if (interaction.customId.startsWith('schedule_modal_')) {
+
 const opponent = interaction.customId.replace('schedule_modal_', '');
 const time = interaction.fields.getTextInputValue('time_input');
 
-scheduledMatches.push({
-teamA: interaction.member.displayName,
+const teamRole = interaction.member.roles.cache.find(r =>
+r.name !== "@everyone"
+);
+
+const teamA = teamRole ? teamRole.name : "Unknown Team";
+
+// SAVE AS PENDING
+pendingMatches.push({
+teamA,
 teamB: opponent,
-time
+time,
+scheduledBy: interaction.user.id
 });
 
 await interaction.reply({
-content: `✅ Match scheduled: ${interaction.member.displayName} vs ${opponent} at ${time}`,
+content: `✅ Match request sent to ${opponent}`,
 ephemeral: true
 });
 
-console.log(scheduledMatches); // debug
+// PING OPPONENT TEAM
+const role = interaction.guild.roles.cache.find(r => r.name === opponent);
+
+if (role) {
+await interaction.channel.send({
+content: `${role} **${teamA} vs ${opponent} — ${time}**\nUse /confirm to approve`
+});
+}
 }
 }
 
