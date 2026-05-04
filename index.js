@@ -26,12 +26,25 @@ const pendingMatches = [];
 global.pendingMatches = pendingMatches;
 global.confirmedMatches = confirmedMatches;
 
-// 🔥 TIME PARSER
-function parseTime(input) {
+// 🔥 DAY + TIME PARSER
+function parseDateTime(input) {
 const match = input.match(/(\w+)\s(\d{1,2})(?::(\d{2}))?\s?(AM|PM)/i);
 if (!match) return null;
 
 let [, day, hour, minute = "00", period] = match;
+
+const days = {
+sunday: 0,
+monday: 1,
+tuesday: 2,
+wednesday: 3,
+thursday: 4,
+friday: 5,
+saturday: 6
+};
+
+const dayIndex = days[day.toLowerCase()];
+if (dayIndex === undefined) return null;
 
 hour = parseInt(hour);
 minute = parseInt(minute);
@@ -39,7 +52,7 @@ minute = parseInt(minute);
 if (period.toUpperCase() === "PM" && hour !== 12) hour += 12;
 if (period.toUpperCase() === "AM" && hour === 12) hour = 0;
 
-return hour * 60 + minute;
+return dayIndex * 1440 + (hour * 60 + minute);
 }
 
 const client = new Client({
@@ -65,7 +78,7 @@ console.log(`Logged in as ${client.user.tag}`);
 
 client.on('interactionCreate', async interaction => {
 
-// SLASH COMMANDS
+// slash commands
 if (interaction.isChatInputCommand()) {
 const command = client.commands.get(interaction.commandName);
 if (!command) return;
@@ -132,23 +145,25 @@ if (interaction.isModalSubmit()) {
 const [league, opponent] = interaction.customId.replace('schedule_modal_', '').split('|');
 const time = interaction.fields.getTextInputValue('time_input');
 
-const newTime = parseTime(time);
+const newTime = parseDateTime(time);
 
 if (!newTime) {
 return interaction.reply({
-content: "❌ Invalid time format. Use like: Tuesday 8PM",
+content: "❌ Use format: Tuesday 8PM",
 ephemeral: true
 });
 }
 
-// 🔥 1-HOUR CHECK
+// 🔥 CHECK DAY + TIME
 for (const match of global.confirmedMatches) {
-const existingTime = parseTime(match.time);
+const existingTime = parseDateTime(match.time);
+
 if (existingTime !== null) {
 const diff = Math.abs(existingTime - newTime);
+
 if (diff < 60) {
 return interaction.reply({
-content: "❌ Another match is within 1 hour.",
+content: "❌ Another match is within 1 hour on that day.",
 ephemeral: true
 });
 }
