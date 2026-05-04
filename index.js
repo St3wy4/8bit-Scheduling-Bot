@@ -11,6 +11,8 @@ ActionRowBuilder,
 StringSelectMenuBuilder
 } = require('discord.js');
 
+const cron = require('node-cron'); // ✅ reset system
+
 const fs = require('fs');
 const path = require('path');
 
@@ -26,6 +28,7 @@ const pendingMatches = [];
 global.pendingMatches = pendingMatches;
 global.confirmedMatches = confirmedMatches;
 
+// 🧠 TEAMS
 const TEAMS = {
 Pixel: [
 "Bedford Bulldogs","Boston Peregrine Falcons","Buffalo Lake Effect",
@@ -40,7 +43,7 @@ Prism: [
 ]
 };
 
-// DAY + TIME PARSER
+// ⏱️ DAY + TIME PARSER
 function parseDateTime(input) {
 const match = input.match(/(\w+)\s(\d{1,2})(?::(\d{2}))?\s?(AM|PM)/i);
 if (!match) return null;
@@ -64,6 +67,7 @@ if (period.toUpperCase() === "AM" && hour === 12) hour = 0;
 return dayIndex * 1440 + (hour * 60 + minute);
 }
 
+// 🤖 CLIENT
 const client = new Client({
 intents: [
 GatewayIntentBits.Guilds,
@@ -84,6 +88,7 @@ client.once('ready', () => {
 console.log(`Logged in as ${client.user.tag}`);
 });
 
+// 🔁 INTERACTIONS
 client.on('interactionCreate', async interaction => {
 
 // slash
@@ -97,15 +102,15 @@ return cmd.execute(interaction);
 if (interaction.isStringSelectMenu() && interaction.customId === 'select_league') {
 const league = interaction.values[0];
 
-const options = TEAMS[league].map(team => ({
-label: team,
-value: `${league}|${team}`
-}));
-
 const menu = new StringSelectMenuBuilder()
 .setCustomId('select_team')
 .setPlaceholder('Select YOUR team')
-.addOptions(options);
+.addOptions(
+TEAMS[league].map(team => ({
+label: team,
+value: `${league}|${team}`
+}))
+);
 
 return interaction.update({
 content: `League: **${league}**\nSelect YOUR team:`,
@@ -117,17 +122,17 @@ components: [new ActionRowBuilder().addComponents(menu)]
 if (interaction.isStringSelectMenu() && interaction.customId === 'select_team') {
 const [league, team] = interaction.values[0].split('|');
 
-const options = TEAMS[league]
+const menu = new StringSelectMenuBuilder()
+.setCustomId('select_opponent')
+.setPlaceholder('Select opponent')
+.addOptions(
+TEAMS[league]
 .filter(t => t !== team)
 .map(t => ({
 label: t,
 value: `${league}|${team}|${t}`
-}));
-
-const menu = new StringSelectMenuBuilder()
-.setCustomId('select_opponent')
-.setPlaceholder('Select opponent')
-.addOptions(options);
+}))
+);
 
 return interaction.update({
 content: `Your Team: **${team}**\nSelect opponent:`,
@@ -153,7 +158,7 @@ modal.addComponents(new ActionRowBuilder().addComponents(input));
 return interaction.showModal(modal);
 }
 
-// MODAL
+// MODAL SUBMIT
 if (interaction.isModalSubmit()) {
 const [league, teamA, opponent] =
 interaction.customId.replace('schedule_modal_', '').split('|');
@@ -168,6 +173,7 @@ ephemeral: true
 });
 }
 
+// 🚫 1-hour rule WITH DAY
 for (const m of global.confirmedMatches) {
 const existing = parseDateTime(m.time);
 if (existing !== null && Math.abs(existing - newTime) < 60) {
@@ -180,15 +186,33 @@ ephemeral: true
 
 pendingMatches.push({ teamA, teamB: opponent, time });
 
-await interaction.reply({ content: "✅ Match request sent", ephemeral: true });
+await interaction.reply({
+content: "✅ Match request sent",
+ephemeral: true
+});
 
 const role = interaction.guild.roles.cache.find(r => r.name === opponent);
+
 if (role) {
 interaction.channel.send(
 `${role} **${teamA} vs ${opponent} — ${time}**\nUse /confirm`
 );
 }
 }
+});
+
+
+// 🔁 🔥 SUNDAY RESET (6AM EST, SILENT)
+cron.schedule('0 6 * * 0', () => {
+
+console.log("🔄 Weekly reset ran");
+
+global.confirmedMatches.length = 0;
+
+fs.writeFileSync(DATA_FILE, JSON.stringify([], null, 2));
+
+}, {
+timezone: "America/New_York"
 });
 
 client.login(process.env.TOKEN);
