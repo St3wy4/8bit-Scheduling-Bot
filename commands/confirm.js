@@ -25,7 +25,7 @@ module.exports = {
     global.confirmedMatches.push(match);
 
     await interaction.reply({
-      content: ✅ Match confirmed: ${match.teamA} vs ${match.teamB} — ${match.time}
+      content: `✅ Match confirmed: ${match.teamA} vs ${match.teamB} — ${match.time}`
     });
   }
 };
