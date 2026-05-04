@@ -26,6 +26,22 @@ const pendingMatches = [];
 global.pendingMatches = pendingMatches;
 global.confirmedMatches = confirmedMatches;
 
+// 🔥 TIME PARSER
+function parseTime(input) {
+const match = input.match(/(\w+)\s(\d{1,2})(?::(\d{2}))?\s?(AM|PM)/i);
+if (!match) return null;
+
+let [, day, hour, minute = "00", period] = match;
+
+hour = parseInt(hour);
+minute = parseInt(minute);
+
+if (period.toUpperCase() === "PM" && hour !== 12) hour += 12;
+if (period.toUpperCase() === "AM" && hour === 12) hour = 0;
+
+return hour * 60 + minute;
+}
+
 const client = new Client({
 intents: [
 GatewayIntentBits.Guilds,
@@ -49,7 +65,7 @@ console.log(`Logged in as ${client.user.tag}`);
 
 client.on('interactionCreate', async interaction => {
 
-// slash commands
+// SLASH COMMANDS
 if (interaction.isChatInputCommand()) {
 const command = client.commands.get(interaction.commandName);
 if (!command) return;
@@ -63,28 +79,15 @@ const league = interaction.values[0];
 
 const TEAMS = {
 Pixel: [
-"Bedford Bulldogs",
-"Boston Peregrine Falcons",
-"Buffalo Lake Effect",
-"Daytona Coastline Control",
-"Denver Apex",
-"Incheon Illusion",
-"Kc Foxtrotters",
-"Louden Lynx",
-"Madison Monarchs",
-"Vancouver Void"
+"Bedford Bulldogs","Boston Peregrine Falcons","Buffalo Lake Effect",
+"Daytona Coastline Control","Denver Apex","Incheon Illusion",
+"Kc Foxtrotters","Louden Lynx","Madison Monarchs","Vancouver Void"
 ],
 Prism: [
-"Arcadia Mages",
-"Calgary Chugs",
-"Chicago Inferno",
-"Hanoi Hydras",
-"Havana Highflyers",
-"Lincoln Sentinels",
-"Miami Nocturnal Hurricanes",
-"New York Nightmare",
-"Santa Carla Freakz",
-"Steinhatchee Scallops"
+"Arcadia Mages","Calgary Chugs","Chicago Inferno",
+"Hanoi Hydras","Havana Highflyers","Lincoln Sentinels",
+"Miami Nocturnal Hurricanes","New York Nightmare",
+"Santa Carla Freakz","Steinhatchee Scallops"
 ]
 };
 
@@ -129,11 +132,31 @@ if (interaction.isModalSubmit()) {
 const [league, opponent] = interaction.customId.replace('schedule_modal_', '').split('|');
 const time = interaction.fields.getTextInputValue('time_input');
 
-const teamRole = interaction.member.roles.cache.find(r => r.name === opponent)
-? "Unknown Team"
-: interaction.member.roles.cache.find(r => r.name !== "@everyone")?.name;
+const newTime = parseTime(time);
 
-const teamA = teamRole || "Unknown Team";
+if (!newTime) {
+return interaction.reply({
+content: "❌ Invalid time format. Use like: Tuesday 8PM",
+ephemeral: true
+});
+}
+
+// 🔥 1-HOUR CHECK
+for (const match of global.confirmedMatches) {
+const existingTime = parseTime(match.time);
+if (existingTime !== null) {
+const diff = Math.abs(existingTime - newTime);
+if (diff < 60) {
+return interaction.reply({
+content: "❌ Another match is within 1 hour.",
+ephemeral: true
+});
+}
+}
+}
+
+const teamRole = interaction.member.roles.cache.find(r => r.name !== "@everyone");
+const teamA = teamRole ? teamRole.name : "Unknown Team";
 
 pendingMatches.push({ teamA, teamB: opponent, time });
 

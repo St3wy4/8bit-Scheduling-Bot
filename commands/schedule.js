@@ -11,7 +11,7 @@ module.exports = {
 
   async execute(interaction) {
 
-    const leagueMenu = new StringSelectMenuBuilder()
+    const menu = new StringSelectMenuBuilder()
       .setCustomId('select_league')
       .setPlaceholder('Select your league')
       .addOptions([
@@ -21,7 +21,7 @@ module.exports = {
 
     await interaction.reply({
       content: "Select your league:",
-      components: [new ActionRowBuilder().addComponents(leagueMenu)],
+      components: [new ActionRowBuilder().addComponents(menu)],
       ephemeral: true
     });
   }
