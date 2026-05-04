@@ -26,7 +26,21 @@ const pendingMatches = [];
 global.pendingMatches = pendingMatches;
 global.confirmedMatches = confirmedMatches;
 
-// 🔥 DAY + TIME PARSER
+const TEAMS = {
+Pixel: [
+"Bedford Bulldogs","Boston Peregrine Falcons","Buffalo Lake Effect",
+"Daytona Coastline Control","Denver Apex","Incheon Illusion",
+"Kc Foxtrotters","Louden Lynx","Madison Monarchs","Vancouver Void"
+],
+Prism: [
+"Arcadia Mages","Calgary Chugs","Chicago Inferno",
+"Hanoi Hydras","Havana Highflyers","Lincoln Sentinels",
+"Miami Nocturnal Hurricanes","New York Nightmare",
+"Santa Carla Freakz","Steinhatchee Scallops"
+]
+};
+
+// DAY + TIME PARSER
 function parseDateTime(input) {
 const match = input.match(/(\w+)\s(\d{1,2})(?::(\d{2}))?\s?(AM|PM)/i);
 if (!match) return null;
@@ -34,13 +48,8 @@ if (!match) return null;
 let [, day, hour, minute = "00", period] = match;
 
 const days = {
-sunday: 0,
-monday: 1,
-tuesday: 2,
-wednesday: 3,
-thursday: 4,
-friday: 5,
-saturday: 6
+sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+thursday: 4, friday: 5, saturday: 6
 };
 
 const dayIndex = days[day.toLowerCase()];
@@ -65,8 +74,7 @@ GatewayIntentBits.MessageContent
 
 client.commands = new Collection();
 
-const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
-
+const commandFiles = fs.readdirSync('./commands').filter(f => f.endsWith('.js'));
 for (const file of commandFiles) {
 const command = require(`./commands/${file}`);
 client.commands.set(command.data.name, command);
@@ -78,31 +86,16 @@ console.log(`Logged in as ${client.user.tag}`);
 
 client.on('interactionCreate', async interaction => {
 
-// slash commands
+// slash
 if (interaction.isChatInputCommand()) {
-const command = client.commands.get(interaction.commandName);
-if (!command) return;
-await command.execute(interaction);
+const cmd = client.commands.get(interaction.commandName);
+if (!cmd) return;
+return cmd.execute(interaction);
 }
 
 // SELECT LEAGUE
 if (interaction.isStringSelectMenu() && interaction.customId === 'select_league') {
-
 const league = interaction.values[0];
-
-const TEAMS = {
-Pixel: [
-"Bedford Bulldogs","Boston Peregrine Falcons","Buffalo Lake Effect",
-"Daytona Coastline Control","Denver Apex","Incheon Illusion",
-"Kc Foxtrotters","Louden Lynx","Madison Monarchs","Vancouver Void"
-],
-Prism: [
-"Arcadia Mages","Calgary Chugs","Chicago Inferno",
-"Hanoi Hydras","Havana Highflyers","Lincoln Sentinels",
-"Miami Nocturnal Hurricanes","New York Nightmare",
-"Santa Carla Freakz","Steinhatchee Scallops"
-]
-};
 
 const options = TEAMS[league].map(team => ({
 label: team,
@@ -110,41 +103,62 @@ value: `${league}|${team}`
 }));
 
 const menu = new StringSelectMenuBuilder()
+.setCustomId('select_team')
+.setPlaceholder('Select YOUR team')
+.addOptions(options);
+
+return interaction.update({
+content: `League: **${league}**\nSelect YOUR team:`,
+components: [new ActionRowBuilder().addComponents(menu)]
+});
+}
+
+// SELECT YOUR TEAM
+if (interaction.isStringSelectMenu() && interaction.customId === 'select_team') {
+const [league, team] = interaction.values[0].split('|');
+
+const options = TEAMS[league]
+.filter(t => t !== team)
+.map(t => ({
+label: t,
+value: `${league}|${team}|${t}`
+}));
+
+const menu = new StringSelectMenuBuilder()
 .setCustomId('select_opponent')
 .setPlaceholder('Select opponent')
 .addOptions(options);
 
-await interaction.update({
-content: `League: **${league}**\nSelect opponent:`,
+return interaction.update({
+content: `Your Team: **${team}**\nSelect opponent:`,
 components: [new ActionRowBuilder().addComponents(menu)]
 });
 }
 
 // SELECT OPPONENT
 if (interaction.isStringSelectMenu() && interaction.customId === 'select_opponent') {
-
-const [league, opponent] = interaction.values[0].split('|');
+const [league, teamA, opponent] = interaction.values[0].split('|');
 
 const modal = new ModalBuilder()
-.setCustomId(`schedule_modal_${league}|${opponent}`)
+.setCustomId(`schedule_modal_${league}|${teamA}|${opponent}`)
 .setTitle('Enter Match Time');
 
 const input = new TextInputBuilder()
 .setCustomId('time_input')
-.setLabel('Match Time (ex: Tuesday 8PM EST)')
+.setLabel('Match Time (ex: Tuesday 8PM)')
 .setStyle(TextInputStyle.Short);
 
 modal.addComponents(new ActionRowBuilder().addComponents(input));
 
-await interaction.showModal(modal);
+return interaction.showModal(modal);
 }
 
-// MODAL SUBMIT
+// MODAL
 if (interaction.isModalSubmit()) {
+const [league, teamA, opponent] =
+interaction.customId.replace('schedule_modal_', '').split('|');
 
-const [league, opponent] = interaction.customId.replace('schedule_modal_', '').split('|');
 const time = interaction.fields.getTextInputValue('time_input');
-
 const newTime = parseDateTime(time);
 
 if (!newTime) {
@@ -154,41 +168,27 @@ ephemeral: true
 });
 }
 
-// 🔥 CHECK DAY + TIME
-for (const match of global.confirmedMatches) {
-const existingTime = parseDateTime(match.time);
-
-if (existingTime !== null) {
-const diff = Math.abs(existingTime - newTime);
-
-if (diff < 60) {
+for (const m of global.confirmedMatches) {
+const existing = parseDateTime(m.time);
+if (existing !== null && Math.abs(existing - newTime) < 60) {
 return interaction.reply({
-content: "❌ Another match is within 1 hour on that day.",
+content: "❌ Match within 1 hour already exists.",
 ephemeral: true
 });
 }
 }
-}
-
-const teamRole = interaction.member.roles.cache.find(r => r.name !== "@everyone");
-const teamA = teamRole ? teamRole.name : "Unknown Team";
 
 pendingMatches.push({ teamA, teamB: opponent, time });
 
-await interaction.reply({
-content: `✅ Match request sent`,
-ephemeral: true
-});
+await interaction.reply({ content: "✅ Match request sent", ephemeral: true });
 
 const role = interaction.guild.roles.cache.find(r => r.name === opponent);
-
 if (role) {
-interaction.channel.send({
-content: `${role} **${teamA} vs ${opponent} — ${time}**\nUse /confirm`
-});
+interaction.channel.send(
+`${role} **${teamA} vs ${opponent} — ${time}**\nUse /confirm`
+);
 }
 }
-
 });
 
 client.login(process.env.TOKEN);
