@@ -7,7 +7,8 @@ Collection,
 ModalBuilder,
 TextInputBuilder,
 TextInputStyle,
-ActionRowBuilder
+ActionRowBuilder,
+StringSelectMenuBuilder
 } = require('discord.js');
 
 const fs = require('fs');
@@ -15,9 +16,7 @@ const path = require('path');
 
 const DATA_FILE = path.join(__dirname, 'matches.json');
 
-// LOAD SAVED MATCHES
 let confirmedMatches = [];
-
 if (fs.existsSync(DATA_FILE)) {
 confirmedMatches = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
 }
@@ -35,7 +34,6 @@ GatewayIntentBits.MessageContent
 ]
 });
 
-// command system
 client.commands = new Collection();
 
 const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
@@ -45,33 +43,74 @@ const command = require(`./commands/${file}`);
 client.commands.set(command.data.name, command);
 }
 
-// ready
 client.once('ready', () => {
 console.log(`Logged in as ${client.user.tag}`);
 });
 
-// interactions
 client.on('interactionCreate', async interaction => {
 
 // slash commands
 if (interaction.isChatInputCommand()) {
 const command = client.commands.get(interaction.commandName);
 if (!command) return;
-
-try {
 await command.execute(interaction);
-} catch (error) {
-console.error(error);
-await interaction.reply({ content: 'Error executing command.', ephemeral: true });
-}
 }
 
-// dropdown
+// SELECT LEAGUE
+if (interaction.isStringSelectMenu() && interaction.customId === 'select_league') {
+
+const league = interaction.values[0];
+
+const TEAMS = {
+Pixel: [
+"Bedford Bulldogs",
+"Boston Peregrine Falcons",
+"Buffalo Lake Effect",
+"Daytona Coastline Control",
+"Denver Apex",
+"Incheon Illusion",
+"Kc Foxtrotters",
+"Louden Lynx",
+"Madison Monarchs",
+"Vancouver Void"
+],
+Prism: [
+"Arcadia Mages",
+"Calgary Chugs",
+"Chicago Inferno",
+"Hanoi Hydras",
+"Havana Highflyers",
+"Lincoln Sentinels",
+"Miami Nocturnal Hurricanes",
+"Nee York Nightmare",
+"Santa Carla Freakz",
+"Steinhatchee Scallops"
+]
+};
+
+const options = TEAMS[league].map(team => ({
+label: team,
+value: `${league}|${team}`
+}));
+
+const menu = new StringSelectMenuBuilder()
+.setCustomId('select_opponent')
+.setPlaceholder('Select opponent')
+.addOptions(options);
+
+await interaction.update({
+content: `League: **${league}**\nSelect opponent:`,
+components: [new ActionRowBuilder().addComponents(menu)]
+});
+}
+
+// SELECT OPPONENT
 if (interaction.isStringSelectMenu() && interaction.customId === 'select_opponent') {
-const opponent = interaction.values[0];
+
+const [league, opponent] = interaction.values[0].split('|');
 
 const modal = new ModalBuilder()
-.setCustomId(`schedule_modal_${opponent}`)
+.setCustomId(`schedule_modal_${league}|${opponent}`)
 .setTitle('Enter Match Time');
 
 const input = new TextInputBuilder()
@@ -84,38 +123,31 @@ modal.addComponents(new ActionRowBuilder().addComponents(input));
 await interaction.showModal(modal);
 }
 
-// modal submit
+// MODAL SUBMIT
 if (interaction.isModalSubmit()) {
-if (interaction.customId.startsWith('schedule_modal_')) {
 
-const opponent = interaction.customId.replace('schedule_modal_', '');
+const [league, opponent] = interaction.customId.replace('schedule_modal_', '').split('|');
 const time = interaction.fields.getTextInputValue('time_input');
 
-const teamRole = interaction.member.roles.cache.find(r =>
-r.name !== "@everyone"
-);
+const teamRole = interaction.member.roles.cache.find(r => r.name === opponent)
+? "Unknown Team"
+: interaction.member.roles.cache.find(r => r.name !== "@everyone")?.name;
 
-const teamA = teamRole ? teamRole.name : "Unknown Team";
+const teamA = teamRole || "Unknown Team";
 
-pendingMatches.push({
-teamA,
-teamB: opponent,
-time,
-scheduledBy: interaction.user.id
-});
+pendingMatches.push({ teamA, teamB: opponent, time });
 
 await interaction.reply({
-content: `✅ Match request sent to ${opponent}`,
+content: `✅ Match request sent`,
 ephemeral: true
 });
 
 const role = interaction.guild.roles.cache.find(r => r.name === opponent);
 
 if (role) {
-await interaction.channel.send({
-content: `${role} **${teamA} vs ${opponent} — ${time}**\nUse /confirm to approve`
+interaction.channel.send({
+content: `${role} **${teamA} vs ${opponent} — ${time}**\nUse /confirm`
 });
-}
 }
 }
 
