@@ -82,7 +82,7 @@ Prism: [
 "Havana Highflyers",
 "Lincoln Sentinels",
 "Miami Nocturnal Hurricanes",
-"Nee York Nightmare",
+"New York Nightmare",
 "Santa Carla Freakz",
 "Steinhatchee Scallops"
 ]
