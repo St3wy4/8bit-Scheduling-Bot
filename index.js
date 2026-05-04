@@ -11,6 +11,21 @@ ActionRowBuilder
 } = require('discord.js');
 
 const fs = require('fs');
+const path = require('path');
+
+const DATA_FILE = path.join(__dirname, 'matches.json');
+
+// LOAD SAVED MATCHES
+let confirmedMatches = [];
+
+if (fs.existsSync(DATA_FILE)) {
+confirmedMatches = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+}
+
+const pendingMatches = [];
+
+global.pendingMatches = pendingMatches;
+global.confirmedMatches = confirmedMatches;
 
 const client = new Client({
 intents: [
@@ -30,22 +45,15 @@ const command = require(`./commands/${file}`);
 client.commands.set(command.data.name, command);
 }
 
-// MATCH STORAGE
-const pendingMatches = [];
-const confirmedMatches = [];
-
-global.pendingMatches = pendingMatches;
-global.confirmedMatches = confirmedMatches;
-
 // ready
 client.once('ready', () => {
 console.log(`Logged in as ${client.user.tag}`);
 });
 
-// interaction handler
+// interactions
 client.on('interactionCreate', async interaction => {
 
-// SLASH COMMANDS
+// slash commands
 if (interaction.isChatInputCommand()) {
 const command = client.commands.get(interaction.commandName);
 if (!command) return;
@@ -58,7 +66,7 @@ await interaction.reply({ content: 'Error executing command.', ephemeral: true }
 }
 }
 
-// DROPDOWN SELECT
+// dropdown
 if (interaction.isStringSelectMenu() && interaction.customId === 'select_opponent') {
 const opponent = interaction.values[0];
 
@@ -76,7 +84,7 @@ modal.addComponents(new ActionRowBuilder().addComponents(input));
 await interaction.showModal(modal);
 }
 
-// MODAL SUBMIT
+// modal submit
 if (interaction.isModalSubmit()) {
 if (interaction.customId.startsWith('schedule_modal_')) {
 
@@ -89,7 +97,6 @@ r.name !== "@everyone"
 
 const teamA = teamRole ? teamRole.name : "Unknown Team";
 
-// SAVE AS PENDING
 pendingMatches.push({
 teamA,
 teamB: opponent,
@@ -102,7 +109,6 @@ content: `✅ Match request sent to ${opponent}`,
 ephemeral: true
 });
 
-// PING OPPONENT TEAM
 const role = interaction.guild.roles.cache.find(r => r.name === opponent);
 
 if (role) {
