@@ -19,7 +19,7 @@ for (const file of commandFiles) {
 
 // ready
 client.once('ready', () => {
-  console.log(Logged in as ${client.user.tag});
+  console.log(`Logged in as ${client.user.tag}`);
 });
 
 // handle slash commands
