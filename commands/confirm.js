@@ -1,4 +1,5 @@
 const { SlashCommandBuilder } = require('discord.js');
+
 const fs = require('fs');
 const path = require('path');
 
@@ -19,20 +20,26 @@ module.exports = {
 
     if (matchIndex === -1) {
       return interaction.reply({
-        content: "❌ No match to confirm.",
+        content: "❌ No pending match found.",
         ephemeral: true
       });
     }
 
     const match = global.pendingMatches.splice(matchIndex, 1)[0];
 
+    // ✅ ADD MATCH
     global.confirmedMatches.push(match);
 
-    // SAVE TO FILE
-    fs.writeFileSync(DATA_FILE, JSON.stringify(global.confirmedMatches, null, 2));
+    // ✅ SAVE TO matches.json
+    fs.writeFileSync(
+      DATA_FILE,
+      JSON.stringify(global.confirmedMatches, null, 2)
+    );
+
+    console.log("✅ Match saved");
 
     await interaction.reply({
-      content: `✅ Match confirmed: ${match.teamA} vs ${match.teamB} — ${match.time}`
+      content: `✅ Match confirmed:\n${match.teamA} vs ${match.teamB} — ${match.time}`
     });
   }
 };
