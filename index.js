@@ -18,20 +18,15 @@ const path = require('path');
 
 const DATA_FILE = path.join(__dirname, 'matches.json');
 
-let confirmedMatches = [];
+global.pendingMatches = [];
+global.confirmedMatches = [];
 
 if (fs.existsSync(DATA_FILE)) {
-confirmedMatches = JSON.parse(
+global.confirmedMatches = JSON.parse(
 fs.readFileSync(DATA_FILE, 'utf8')
 );
 }
 
-const pendingMatches = [];
-
-global.pendingMatches = pendingMatches;
-global.confirmedMatches = confirmedMatches;
-
-// 🧠 TEAMS
 const TEAMS = {
 Pixel: [
 "Bedford Bulldogs",
@@ -60,7 +55,6 @@ Prism: [
 ]
 };
 
-// 🕒 TIME PARSER
 function parseMatchTime(input) {
 
 const match = input.match(
@@ -85,18 +79,14 @@ totalMinutes: hour * 60 + minutes
 };
 }
 
-// 🤖 CLIENT
 const client = new Client({
 intents: [
-GatewayIntentBits.Guilds,
-GatewayIntentBits.GuildMessages,
-GatewayIntentBits.MessageContent
+GatewayIntentBits.Guilds
 ]
 });
 
 client.commands = new Collection();
 
-// 📂 LOAD COMMANDS
 const commandFiles = fs
 .readdirSync('./commands')
 .filter(file => file.endsWith('.js'));
@@ -112,10 +102,8 @@ client.once('ready', () => {
 console.log(`Logged in as ${client.user.tag}`);
 });
 
-// 🔁 INTERACTIONS
 client.on('interactionCreate', async interaction => {
 
-// SLASH COMMANDS
 if (interaction.isChatInputCommand()) {
 
 const command = client.commands.get(
@@ -124,10 +112,10 @@ interaction.commandName
 
 if (!command) return;
 
-await command.execute(interaction);
+return command.execute(interaction);
 }
 
-// SELECT LEAGUE
+// LEAGUE DROPDOWN
 if (
 interaction.isStringSelectMenu() &&
 interaction.customId === 'select_league'
@@ -145,16 +133,15 @@ const menu = new StringSelectMenuBuilder()
 .setPlaceholder('Select YOUR team')
 .addOptions(options);
 
-await interaction.update({
-content:
-`League: **${league}**\nSelect YOUR team:`,
+return interaction.update({
+content: 'Select your team:',
 components: [
 new ActionRowBuilder().addComponents(menu)
 ]
 });
 }
 
-// SELECT TEAM
+// TEAM DROPDOWN
 if (
 interaction.isStringSelectMenu() &&
 interaction.customId === 'select_team'
@@ -175,16 +162,15 @@ const menu = new StringSelectMenuBuilder()
 .setPlaceholder('Select opponent')
 .addOptions(options);
 
-await interaction.update({
-content:
-`Your Team: **${team}**\nSelect opponent:`,
+return interaction.update({
+content: 'Select opponent:',
 components: [
 new ActionRowBuilder().addComponents(menu)
 ]
 });
 }
 
-// SELECT OPPONENT
+// OPPONENT DROPDOWN
 if (
 interaction.isStringSelectMenu() &&
 interaction.customId === 'select_opponent'
@@ -195,28 +181,29 @@ interaction.values[0].split('|');
 
 const modal = new ModalBuilder()
 .setCustomId(
-`schedule_modal_${league}|${teamA}|${opponent}`
+`schedule_modal_${teamA}|${opponent}`
 )
 .setTitle('Enter Match Time');
 
 const input = new TextInputBuilder()
 .setCustomId('time_input')
-.setLabel(
-'Example: Friday 8:15PM'
-)
+.setLabel('Example: Friday 8:15PM')
 .setStyle(TextInputStyle.Short);
 
 modal.addComponents(
 new ActionRowBuilder().addComponents(input)
 );
 
-await interaction.showModal(modal);
+return interaction.showModal(modal);
 }
 
-// MODAL SUBMIT
-if (interaction.isModalSubmit()) {
+// TIME MODAL
+if (
+interaction.isModalSubmit() &&
+interaction.customId.startsWith('schedule_modal_')
+) {
 
-const [league, teamA, opponent] =
+const [teamA, opponent] =
 interaction.customId
 .replace('schedule_modal_', '')
 .split('|');
@@ -226,18 +213,16 @@ interaction.fields.getTextInputValue(
 'time_input'
 );
 
-// 🕒 PARSE TIME
 const newMatch = parseMatchTime(time);
 
 if (!newMatch) {
 return interaction.reply({
 content:
-"❌ Invalid format. Example: Friday 8:15PM",
+'❌ Invalid format. Example: Friday 8:15PM',
 ephemeral: true
 });
 }
 
-// 🚫 SAME DAY CONFLICTS ONLY
 const conflict =
 global.confirmedMatches.find(existing => {
 
@@ -246,7 +231,6 @@ parseMatchTime(existing.time);
 
 if (!existingMatch) return false;
 
-// ONLY compare SAME DAY
 if (
 existingMatch.day !== newMatch.day
 ) {
@@ -258,31 +242,23 @@ existingMatch.totalMinutes -
 newMatch.totalMinutes
 );
 
-// MUST be at least 60 mins apart
 return difference < 60;
 });
 
 if (conflict) {
 return interaction.reply({
 content:
-"❌ Another match is within 1 hour on that day.",
+'❌ Another match is within 1 hour on that day.',
 ephemeral: true
 });
 }
 
-// SAVE PENDING
-pendingMatches.push({
+global.pendingMatches.push({
 teamA,
 teamB: opponent,
 time
 });
 
-await interaction.reply({
-content: `✅ Match request sent`,
-ephemeral: true
-});
-
-// PING OPPONENT
 const role =
 interaction.guild.roles.cache.find(
 r => r.name === opponent
@@ -291,26 +267,32 @@ r => r.name === opponent
 if (role) {
 interaction.channel.send({
 content:
-`${role} **${teamA} vs ${opponent} — ${time}**\nUse /confirm`
+`${role} Match request:\n🏆 ${teamA} vs ${opponent}\n🕒 ${time}\nUse /confirm`
 });
 }
+
+return interaction.reply({
+content:
+`✅ Match request sent:\n🏆 ${teamA} vs ${opponent}\n🕒 ${time}`,
+ephemeral: true
+});
 }
 });
 
-// 🔁 SUNDAY RESET
+// SUNDAY RESET
 cron.schedule('0 6 * * 0', () => {
 
-console.log("🔄 Weekly reset ran");
-
-global.confirmedMatches.length = 0;
+global.confirmedMatches = [];
 
 fs.writeFileSync(
 DATA_FILE,
 JSON.stringify([], null, 2)
 );
 
+console.log('Weekly reset complete');
+
 }, {
-timezone: "America/New_York"
+timezone: 'America/New_York'
 });
 
 client.login(process.env.TOKEN);
