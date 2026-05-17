@@ -35,7 +35,7 @@ Pixel: [
 "Daytona Coastline Control",
 "Denver Apex",
 "Incheon Illusion",
-"Kc Foxtrotters",
+"KC Foxtrotters",
 "Louden Lynx",
 "Madison Monarchs",
 "Vancouver Void"
